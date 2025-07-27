@@ -1,0 +1,86 @@
+create table blinkit_base as 
+with blinkit_base as 
+(
+select created_at as date, 
+brand_id, brand, image_url,
+city_name,
+sku_id, sku_name,
+b.l1_category_id as category_id,
+b.l1_category as category_name,
+b.l2_category_id as sub_category_id,
+b.l2_category as sub_category_name,
+abc.store_id,
+selling_price, mrp, inventory, unit,
+ROW_NUMBER() OVER (PARTITION BY abc.store_id, abc.sku_id ORDER BY abc.created_at) AS rn
+from all_blinkit_category_scraping_stream abc
+inner join blinkit_city_map bcm
+on abc.store_id = bcm.store_id
+left join blinkit_categories b
+on abc.l1_category_id = b.l1_category_id
+and abc.l2_category_id = b.l2_category_id);
+
+-- select * from blinkit_base ;
+
+create table inventory_logic as (
+SELECT *,CASE
+        WHEN next_inventory IS NOT NULL AND next_inventory < inventory THEN inventory - next_inventory
+        WHEN next_inventory IS NOT NULL AND next_inventory >= inventory THEN 0
+        ELSE 0 END AS est_qty_sold 
+from (
+SELECT curr.*,
+nxt.inventory AS next_inventory
+FROM blinkit_base curr
+LEFT JOIN blinkit_base nxt
+ON curr.store_id = nxt.store_id AND curr.sku_id = nxt.sku_id AND curr.rn + 1 = nxt.rn
+) as a );
+
+
+CREATE TABLE ds_stats AS
+SELECT
+    sku_id,
+    COUNT(DISTINCT store_id) AS ds_count,
+    SUM(CASE WHEN inventory > 0 THEN 1 ELSE 0 END) AS in_stock_count
+FROM all_blinkit_category_scraping_stream
+GROUP BY sku_id;
+
+CREATE TABLE sku_mode_mrp_sp AS
+SELECT sku_id, (SELECT mrp
+		FROM all_blinkit_category_scraping_stream s2
+           WHERE s2.sku_id = s1.sku_id
+           GROUP BY mrp
+           ORDER BY COUNT(*) DESC
+           LIMIT 1
+       ) AS mode_mrp,
+(SELECT selling_price
+           FROM all_blinkit_category_scraping_stream s3
+           WHERE s3.sku_id = s1.sku_id
+           GROUP BY selling_price
+           ORDER BY COUNT(*) DESC
+           LIMIT 1
+       ) AS mode_sp
+FROM (
+    SELECT DISTINCT sku_id FROM all_blinkit_category_scraping_stream
+) s1;
+
+
+
+select b.*, 
+ds_count, round(in_stock_count/ds_count,2) as wt_osa,
+round(in_stock_count/listed_ds_count,2) as wt_osa_ls,
+mode_mrp as mrp, mode_sp as sp,
+round((mode_mrp-mode_sp)/mode_mrp,2) as discount
+from(
+select date, 
+brand_id, brand, image_url, city_name, sku_id, sku_name,
+category_id, category_name, sub_category_id, sub_category_name,
+SUM(est_qty_sold) AS est_qty_sold,
+SUM(est_qty_sold * selling_price) AS est_sales_sp,
+SUM(est_qty_sold * mrp) AS est_sales_mrp,
+COUNT(DISTINCT store_id) AS listed_ds_count
+from inventory_logic
+group by date, brand_id, brand, image_url, city_name, sku_id, sku_name, category_id, category_name, sub_category_id, sub_category_name) as b
+left join ds_stats ds 
+on b.sku_id = ds.sku_id
+left join sku_mode_mrp_sp ms
+on b.sku_id = ms.sku_id
+
