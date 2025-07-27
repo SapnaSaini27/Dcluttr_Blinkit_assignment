@@ -1,11 +1,11 @@
 # Dcluttr_Blinkit_assignment
+all_blinkit_category_scraping_stream dataset- https://drive.google.com/file/d/1lxUiQ0Beh5jK5e44Mt7E5E-6MgSKz71Q/view?usp=sharing
 
-
-Blinkit City Insights – SQL-Based Inventory and Sales Estimation
+## Blinkit City Insights – SQL-Based Inventory and Sales Estimation
 
 This project showcases advanced SQL techniques to create a derived table, blinkit_city_insights, from raw Blinkit product listing data. The objective is to estimate product-level sales performance across cities by analyzing inventory changes over time.
 
-Key Features:
+## Key Features:
 
 Developed entirely in MySQL using Common Table Expressions (CTEs) and window functions
 
@@ -17,7 +17,7 @@ Computed on-shelf availability metrics (wt_osa, wt_osa_ls)
 
 Fully ATS-optimized SQL script with export-ready output in CSV format
 
-Tech Stack:
+## Tech Stack:
 MySQL, MySQL Workbench, CSV data processing
 
 Skills Demonstrated:
